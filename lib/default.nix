@@ -1,0 +1,3 @@
+{
+  mkFlake = import ./mkFlake.nix;
+}
