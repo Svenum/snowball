@@ -1,13 +1,6 @@
 { pkgs, inputs, ... }:
 {
-  # satisfies assertions; build-vm overrides both via qemu-vm.nix
-  fileSystems."/" = {
-    device = "/dev/disk/by-label/nixos";
-    fsType = "ext4";
-  };
-
   imports = [
-    inputs.disko.nixosModules.disko
     ./disko.nix
   ];
   boot.loader.grub.devices = [ "nodev" ];
@@ -26,5 +19,5 @@
   ];
   services.openssh.enable = true;
 
-  system.stateVersion = "26.05";
+  system.stateVersion = "26.11";
 }

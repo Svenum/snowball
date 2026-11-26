@@ -25,7 +25,7 @@ let
   overlaysPath = root + "/overlays";
 
   # Additional modules for each system
-  allSystems = if (hasAttr "allSystems" options) then options.systemModules else { };
+  allSystems = if (hasAttr "allSystems" options) then options.allSystems else { };
 
   overlays = map (overlay: (import overlay { inherit inputs; })) (
     concatLists (attrValues inputs.self.overlays)
@@ -91,7 +91,6 @@ in
 {
   inherit inputs;
   inherit (inputs) self;
-  snowball = overlays;
 }
 // optionalAttrs (pathExists systemsPath) {
   nixosConfigurations = dirToSystems systemsPath;
