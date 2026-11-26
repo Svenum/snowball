@@ -9,20 +9,27 @@ let
     pathExists
     readDir
     attrNames
+    attrValues
     foldl'
     hasAttr
+    concatLists
     ;
 
   inherit (lib) optionals genAttrs optionalAttrs;
   inherit (options) root;
 
-  # Default paths for systems, homeModules and nixosModules
+  # Default paths for systems, homeModules, nixosModules and overlays
   systemsPath = root + "/systems";
   nixosModulesPath = root + "/modules/nixos";
   homeModulesPath = root + "/modules/home";
+  overlaysPath = root + "/overlays";
 
   # Additional modules for each system
   allSystems = if (hasAttr "allSystems" options) then options.systemModules else { };
+
+  overlays = map (overlay: (import overlay { inherit inputs; })) (
+    concatLists (attrValues inputs.self.overlays)
+  );
 
   # This helper function loads the dirs and subdirs
   # of a directory and creates a hosts attribute set
@@ -54,6 +61,7 @@ let
             // optionalAttrs (hasAttr "specialArgs" systemOptions) systemOptions.specialArgs;
             modules = [
               (dir + "/${systemType}/${system}")
+              (_: { nixpkgs = { inherit overlays; }; })
             ]
             ++ optionals (hasAttr "modules" allSystems) allSystems.modules
             ++ optionals (hasAttr "modules" systemOptions) systemOptions.modules;
@@ -83,6 +91,7 @@ in
 {
   inherit inputs;
   inherit (inputs) self;
+  snowball = overlays;
 }
 // optionalAttrs (pathExists systemsPath) {
   nixosConfigurations = dirToSystems systemsPath;
@@ -92,4 +101,7 @@ in
 }
 // optionalAttrs (pathExists homeModulesPath) {
   homeModules = dirToModules homeModulesPath;
+}
+// optionalAttrs (pathExists overlaysPath) {
+  overlays = dirToModules overlaysPath;
 }
