@@ -12,6 +12,7 @@ let
     pathExists
     readDir
     attrNames
+    attrValues
     foldl'
     hasAttr
     elem
@@ -23,6 +24,7 @@ let
     optionalAttrs
     recursiveUpdate
     mapAttrsToList
+    flatten
     ;
   inherit (lib.fileset) toList fileFilter;
 
@@ -106,7 +108,8 @@ let
                 (_: { nixpkgs = { inherit overlays; }; })
               ]
               ++ optionals (hasAttr "modules" allSystems) allSystems.modules
-              ++ optionals (hasAttr "modules" systemOptions) systemOptions.modules;
+              ++ optionals (hasAttr "modules" systemOptions) systemOptions.modules
+              ++ optionals (pathExists nixosModulesPath) (flatten (attrValues self.nixosModules));
           }
         ))
       ) systemTypes;
