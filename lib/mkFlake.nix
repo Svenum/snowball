@@ -1,18 +1,19 @@
 options:
 
 let
+  # Prepare often used variables
+  inherit (options) root;
   inherit (options) inputs;
   inherit (inputs) self nixpkgs;
   lib = nixpkgs.lib;
 
+  # Make required modules available
   inherit (builtins)
     pathExists
     readDir
     attrNames
-    attrValues
     foldl'
     hasAttr
-    concatLists
     elem
     ;
 
@@ -23,7 +24,7 @@ let
     recursiveUpdate
     mapAttrsToList
     ;
-  inherit (options) root;
+  inherit (lib.fileset) toList fileFilter;
 
   # Default paths for systems, homeModules, nixosModules and overlays
   systemsPath = root + "/systems";
@@ -48,11 +49,11 @@ let
 
   # This helper function loads the dirs and subdirs
   # of a directory and creates a hosts attribute set
-  # e.g.:    /systems/x86_64-linux/example/default.nix
+  # e.g.:    <root>/systems/x86_64-linux/example/default.nix
   # becomes:
   # example = {
   #   system = "x86_64-linux";
-  #   imports = [ ./systems/x86_64-linux/example ];
+  #   imports = [ <root>/systems/x86_64-linux/example ];
   # }
   dirToSystems =
     dir:
@@ -60,6 +61,7 @@ let
       systemTypes = attrNames (readDir dir);
       systems = map (
         systemType:
+        # End the evaluation if a system type is not in the supportedSystems list
         assert
           (elem systemType supportedSystems)
           || abort ''
@@ -82,7 +84,18 @@ let
             // optionalAttrs (hasAttr "specialArgs" systemOptions) systemOptions.specialArgs;
             modules =
               let
-                overlays = mapAttrsToList (name: value: value) self.overlays;
+                # Add own packages as overaly under pkgs.snowball.<package_name>
+                snowballPackages =
+                  if (pathExists packagesPath) then
+                    {
+                      snowballPackages = _final: _prev: {
+                        snowball = self.packages."${systemType}";
+                      };
+                    }
+                  else
+                    { };
+                # Combine package overlay with user defined overlays
+                overlays = mapAttrsToList (name: value: value) (self.overlays // snowballPackages);
               in
               [
                 (dir + "/${systemType}/${system}")
@@ -98,26 +111,24 @@ let
 
   # This helper function loads the dirs and all its
   # subdirs of a directory and creates a module attribute set
-  # e.g.:    /modules/example/test/default.nix
+  # e.g.:    <root>/modules/example/test/default.nix
   # becomes:
-  # example = [ /modules/example/test/default.nix ];
+  # example = [ <root>/modules/example/test/default.nix ];
   dirToModules =
     dir:
     let
       modules = attrNames (readDir dir);
       modulesWithSubmodules = map (module: {
-        "${module}" = lib.fileset.toList (
-          (lib.fileset.fileFilter (file: file.name == "default.nix")) (dir + "/${module}")
-        );
+        "${module}" = toList ((fileFilter (file: file.name == "default.nix")) (dir + "/${module}"));
       }) modules;
     in
     foldl' (setOfModules: module: setOfModules // module) { } modulesWithSubmodules;
 
   # This helper function loads the dirs and all its
   # subdirs of a directory and creates a overlay attribute set
-  # e.g.:    /overlays/example/default.nix
+  # e.g.:    <root>/overlays/example/default.nix
   # becomes:
-  # example = <<lambda @ /overlays/example/default.nix:3:1>>;
+  # example = <<lambda @ <root>/overlays/example/default.nix:3:1>>;
   dirToOverlays =
     dir:
     let
@@ -134,12 +145,12 @@ let
   # This helper function loads the dirs and all its
   # subdirs of a directory and creates a attribute set
   # of packages for each system in supportedSystems
-  # e.g.:    /packages/example/default.nix
+  # e.g.:    <root>/packages/example/default.nix
   # becomes:
   # {
-  #   x86_64-linux.example = pkgs.callPackage /packages/example/default.nix {};
-  #   aarch64-linux.example = pkgs.callPackage /packages/example/default.nix {};
-  #   aarch64-darwin.example = pkgs.callPackage /packages/example/default.nix {};
+  #   x86_64-linux.example = pkgs.callPackage <root>/packages/example/default.nix {};
+  #   aarch64-linux.example = pkgs.callPackage <root>/packages/example/default.nix {};
+  #   aarch64-darwin.example = pkgs.callPackage <root>/packages/example/default.nix {};
   # };
   dirToPackages =
     dir:
@@ -161,11 +172,7 @@ let
     in
     foldl' (setOfOverlays: overlay: recursiveUpdate setOfOverlays overlay) { } packages;
 in
-{
-  inherit inputs;
-  inherit self;
-}
-// optionalAttrs (pathExists systemsPath) {
+optionalAttrs (pathExists systemsPath) {
   nixosConfigurations = dirToSystems systemsPath;
 }
 // optionalAttrs (pathExists nixosModulesPath) {
