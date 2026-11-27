@@ -95,7 +95,11 @@ let
                   else
                     { };
                 # Combine package overlay with user defined overlays
-                overlays = mapAttrsToList (name: value: value) (self.overlays // snowballPackages);
+                overlays =
+                  if (pathExists overlaysPath) then
+                    mapAttrsToList (name: value: value) (self.overlays // snowballPackages)
+                  else
+                    [ ];
               in
               [
                 (dir + "/${systemType}/${system}")
